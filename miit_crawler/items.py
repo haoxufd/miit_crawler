@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from matplotlib.pyplot import sca
 import scrapy
 
 
@@ -6,9 +7,10 @@ class MiitCrawlerItem(scrapy.Item):
     """
     定义要收集的数据项
     """
+    request_number = scrapy.Field()
+    request_url = scrapy.Field()
     # 图片相关
     image_urls = scrapy.Field()  # 所有图片的 url 列表
-    image_paths = scrapy.Field()
     
     # 基本信息
     product_id = scrapy.Field()  # 产品号

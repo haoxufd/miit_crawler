@@ -6,6 +6,8 @@ from ..items import MiitCrawlerItem
 from miit_crawler.exceptions import CaptchaRecognitionError
 import json
 
+import pandas
+
 
 class MiitSpider(scrapy.Spider):
     name = 'miit_spider'
@@ -14,17 +16,21 @@ class MiitSpider(scrapy.Spider):
     def __init__(self, *args, **kwargs):
         super(MiitSpider, self).__init__(*args, **kwargs)
         self.logger.setLevel(logging.INFO)
+        try:
+            df = pandas.read_excel('crawled_data/miit_data.xlsx')
+            self.last_num = int(df.iloc[-1, 0].item())
+        except FileNotFoundError as e:
+            self.logger.error(f"文件 crawled_data/miit_data.xlsx 不存在: {e}")
+            self.last_num = 0
         with open('urls.json', 'r') as f:
-            self.start_urls = json.load(f)
-        
-
+            self.start_urls = json.load(f)[self.last_num:]
     def start_requests(self):
         """
         启动爬虫的起始请求
         """
-        for url in self.start_urls:
+        for i, url in enumerate(self.start_urls):
             self.logger.info(f"开始抓取: {url}")
-            yield scrapy.Request(url=url, callback=self.parse)
+            yield scrapy.Request(url=url, callback=self.parse, meta={'number': i + self.last_num + 1})
     
     def parse(self, response):
         """
@@ -34,12 +40,15 @@ class MiitSpider(scrapy.Spider):
         if "访问行为验证" in response.text:
             self.logger.warning("仍然在验证页面，验证可能失败")
             # 如果仍在验证页面，重新请求
-            raise CaptchaRecognitionError("验证可能失败")
+            raise CaptchaRecognitionError("滑块验证失败")
             
         self.logger.info("成功获取内容页面，开始解析...")
         
         # 创建Item
         item = MiitCrawlerItem()
+
+        item["request_url"] = response.request.url
+        item["request_number"] = response.request.meta['number']
         
         # 提取图片URL
         image_urls = []

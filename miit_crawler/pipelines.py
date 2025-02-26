@@ -74,7 +74,7 @@ class MiitCrawlerExcelPipeline:
         
         # 创建时间戳标识的Excel文件
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.excel_file = f"{self.data_dir}/miit_data_{self.timestamp}.xlsx"
+        self.excel_file = f"{self.data_dir}/miit_data.xlsx"
         
         # 创建一个空的数据列表用于存储数据
         self.data = []
@@ -92,6 +92,7 @@ class MiitCrawlerExcelPipeline:
         """
         # 将item转为中文字段名称的字典并添加到数据列表
         chinese_item = {
+            '序号':item.get('request_number'),
             '图片链接': str(item.get('image_urls', [])),  # 转为字符串以便在Excel中显示
             '产品号': item.get('product_id', ''),
             '批次': item.get('batch', ''),
@@ -145,7 +146,7 @@ class MiitCrawlerExcelPipeline:
         
         # 设置Excel中的列顺序
         columns_order = [
-            '产品号', '批次', '发布日期', 
+            '序号', '产品号', '批次', '发布日期', 
             '企业名称', '产品型号名称', '产品商标',
             '生产地址', '注册地址',
             '车辆型号', '车辆名称', '底盘ID',

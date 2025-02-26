@@ -15,7 +15,7 @@ from PIL import Image
 import numpy as np
 from captcha_recognizer.recognizer import Recognizer
 
-from miit_crawler.exceptions import ImageDownloadError
+from miit_crawler.exceptions import CaptchaRecognitionError, ImageDownloadError
 
 import os
 
@@ -42,11 +42,6 @@ class SliderCaptchaSolver:
     
     def get_slide_distance(self, browser):
         try:
-            # 等待验证码图片加载
-            WebDriverWait(browser, 5).until(
-                EC.presence_of_element_located((By.CLASS_NAME, 'yidun_bg-img'))
-            )
-            
             # 获取背景图片
             bg_img_element = browser.find_element(By.CLASS_NAME, 'yidun_bg-img')
             bg_img_url = bg_img_element.get_attribute('src')
@@ -183,7 +178,7 @@ class SeleniumMiddleware(object):
         
         # 初始化Chrome选项
         self.chrome_options = Options()
-        self.chrome_options.add_argument('--headless')  # 取消无头模式以便观察
+        self.chrome_options.add_argument('--headless')
         self.chrome_options.add_argument('--no-sandbox')
         self.chrome_options.add_argument('--disable-dev-shm-usage')
         self.chrome_options.add_argument('--disable-gpu')
@@ -218,8 +213,9 @@ class SeleniumMiddleware(object):
         # 访问页面
         self.browser.get(request.url)
             
-        max_attempts = 3  # 最大尝试次数
+        max_attempts = 1  # 最大尝试次数
         attempt = 0
+        verify_success = False
         while attempt < max_attempts:
             attempt += 1
             self.logger.info(f"开始处理滑块验证... 第{attempt}次尝试")
@@ -232,7 +228,15 @@ class SeleniumMiddleware(object):
                 submit_button = WebDriverWait(self.browser, 3).until(
                     EC.element_to_be_clickable((By.ID, "submit-btn"))
                 )
-                self.logger.info("滑块和提交按钮已加载")
+                # 等待验证码图片加载
+                WebDriverWait(self.browser, 3).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, 'yidun_bg-img'))
+                )
+                self.logger.info("滑块, 提交按钮和验证码图片已加载")
+                
+                bg_img_element = self.browser.find_element(By.CLASS_NAME, 'yidun_bg-img')
+                initial_src = bg_img_element.get_attribute('src')
+                self.logger.info(f"初始图片 src: {initial_src}")
                 
                 # 计算滑动距离
                 distance = self.captcha_solver.get_slide_distance(self.browser)
@@ -247,26 +251,35 @@ class SeleniumMiddleware(object):
                 action.release().perform()
                 self.logger.info("滑块拖动完成")
 
-                time.sleep(0.5)
+                time.sleep(0.1)
 
-                yidun_top_right = WebDriverWait(self.browser, 3).until(
-                    EC.presence_of_element_located((By.CLASS_NAME, "yidun_top__right"))
-                )
-                if yidun_top_right.size["width"] == 0:
-                    # 右上角的刷新按钮被隐藏, 说明滑块验证成功
-
-                    # 点击继续访问按钮
-                    submit_button.click()
-                    self.logger.info("已点击提交按钮")
-                    
-                    # 等待页面加载完成
-                    time.sleep(0.5)
-
+                current_src = bg_img_element.get_attribute('src')
+                self.logger.info(f"当前图片 src: {current_src}")
+            
+                # 比较初始 src 和当前 src
+                if initial_src == current_src:
+                    # 如果 src 没有变化, 说明滑块验证成功
+                    verify_success = True
+                    self.logger.info("滑块验证成功")
                     break
+                else:
+                    self.logger.info("滑块验证失败, 重新尝试")
 
             except Exception as e:
                 self.logger.error(f"处理滑块验证时出错: {str(e)}")
                 self.logger.error(traceback.format_exc())
+        
+        if not verify_success:
+            raise CaptchaRecognitionError("滑块验证失败")
+
+        # 点击继续访问按钮
+        submit_button.click()
+        self.logger.info("已点击提交按钮")
+
+        # 等待页面加载完成
+        WebDriverWait(self.browser, 3).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
         
         # 获取最终页面内容
         body = self.browser.page_source
