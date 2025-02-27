@@ -40,24 +40,20 @@ class SliderCaptchaSolver:
         else:
             raise ImageDownloadError(f"Status code {response.status_code} while downloading {image_url}")
     
-    def get_slide_distance(self, browser):
+    def get_slide_distance(self, bg_img_url, display_width):
         try:
             # 获取背景图片
-            bg_img_element = browser.find_element(By.CLASS_NAME, 'yidun_bg-img')
-            bg_img_url = bg_img_element.get_attribute('src')
-            self.logger.info(f"Downloaded picture {bg_img_url}")
             self.download_image(bg_img_url)
             bg_img_file = bg_img_url.split('/')[-1]
             
             # 获取页面上图片的显示尺寸和实际尺寸
-            displayed_width = bg_img_element.size['width']
             actual_width, _ = Image.open(bg_img_file).size
             
-            self.logger.info(f"Displayed Width: {displayed_width}")
+            self.logger.info(f"Display Width: {display_width}")
             self.logger.info(f"Actual Width: {actual_width}")
             
             # 计算比例系数
-            scale_factor = displayed_width / actual_width
+            scale_factor = display_width / actual_width
 
             self.logger.info(f"Scale Factor: {scale_factor}")
             
@@ -185,7 +181,7 @@ class SeleniumMiddleware(object):
         self.chrome_options.add_argument('--window-size=1920,1080')
         
         # 设置用户代理
-        self.chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36')
+        self.chrome_options.add_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Safari/605.1.15')
         
         # 初始化浏览器
         self.browser = webdriver.Chrome(options=self.chrome_options)
@@ -205,72 +201,51 @@ class SeleniumMiddleware(object):
         """
         处理包含滑块验证的请求
         """
-        # 仅处理特定URL的请求
-        assert 'queryCpData' in request.url
-            
         self.logger.info(f"使用Selenium处理请求: {request.url}")
         
         # 访问页面
         self.browser.get(request.url)
             
-        max_attempts = 1  # 最大尝试次数
-        attempt = 0
-        verify_success = False
-        while attempt < max_attempts:
-            attempt += 1
-            self.logger.info(f"开始处理滑块验证... 第{attempt}次尝试")
+        self.logger.info(f"开始处理滑块验证...")
+        try:
+            # 等待滑块, 继续访问按钮和验证码背景图片加载
+            slider = WebDriverWait(self.browser, 3).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "yidun_slider"))
+            )
+            submit_button = WebDriverWait(self.browser, 3).until(
+                EC.element_to_be_clickable((By.ID, "submit-btn"))
+            )
+            bg_img_element = WebDriverWait(self.browser, 3).until(
+                lambda driver: driver.find_element(By.CLASS_NAME, "yidun_bg-img")
+            )
             
-            try:
-                # 等待滑块和继续访问按钮加载
-                slider = WebDriverWait(self.browser, 3).until(
-                    EC.presence_of_element_located((By.CLASS_NAME, "yidun_slider"))
-                )
-                submit_button = WebDriverWait(self.browser, 3).until(
-                    EC.element_to_be_clickable((By.ID, "submit-btn"))
-                )
-                # 等待验证码图片加载
-                WebDriverWait(self.browser, 3).until(
-                    EC.presence_of_element_located((By.CLASS_NAME, 'yidun_bg-img'))
-                )
-                self.logger.info("滑块, 提交按钮和验证码图片已加载")
-                
-                bg_img_element = self.browser.find_element(By.CLASS_NAME, 'yidun_bg-img')
-                initial_src = bg_img_element.get_attribute('src')
-                self.logger.info(f"初始图片 src: {initial_src}")
-                
-                # 计算滑动距离
-                distance = self.captcha_solver.get_slide_distance(self.browser)
-                self.logger.info(f"滑动距离: {distance}像素")
-                
-                # 执行滑动操作
-                action = ActionChains(self.browser)
-                action.click_and_hold(slider)
-                action.move_by_offset(distance, 0)
-                
-                # 释放鼠标
-                action.release().perform()
-                self.logger.info("滑块拖动完成")
+            self.logger.info("滑块, 提交按钮和验证码图片已加载")
 
-                time.sleep(0.1)
-
-                current_src = bg_img_element.get_attribute('src')
-                self.logger.info(f"当前图片 src: {current_src}")
+            WebDriverWait(self.browser, 3).until(
+                lambda driver: bg_img_element.get_attribute("src") is not None
+            )
+            bg_img_url = bg_img_element.get_attribute("src")
             
-                # 比较初始 src 和当前 src
-                if initial_src == current_src:
-                    # 如果 src 没有变化, 说明滑块验证成功
-                    verify_success = True
-                    self.logger.info("滑块验证成功")
-                    break
-                else:
-                    self.logger.info("滑块验证失败, 重新尝试")
+            # 计算滑动距离
+            distance = self.captcha_solver.get_slide_distance(bg_img_url, bg_img_element.size["width"])
+            self.logger.info(f"滑动距离: {distance}像素")
 
-            except Exception as e:
-                self.logger.error(f"处理滑块验证时出错: {str(e)}")
-                self.logger.error(traceback.format_exc())
-        
-        if not verify_success:
-            raise CaptchaRecognitionError("滑块验证失败")
+            track = [distance]
+            
+            # 执行滑动操作
+            action = ActionChains(self.browser)
+            action.click_and_hold(slider)
+            for step in track:
+                action.move_by_offset(step, 0)
+            
+            # 释放鼠标
+            action.release().perform()
+            self.logger.info("滑块拖动完成")
+
+        except Exception as e:
+            self.logger.error(f"处理滑块验证时出错: {str(e)}")
+            self.logger.error(traceback.format_exc())
+            raise e
 
         # 点击继续访问按钮
         submit_button.click()
@@ -284,7 +259,11 @@ class SeleniumMiddleware(object):
         # 获取最终页面内容
         body = self.browser.page_source
         current_url = self.browser.current_url
-        
+
+        if "访问行为被禁止" in body:
+            self.logger.error("滑块验证失败")
+            raise CaptchaRecognitionError("滑块验证失败")
+
         # 返回Response对象
         return HtmlResponse(
             url=current_url,
@@ -292,7 +271,7 @@ class SeleniumMiddleware(object):
             encoding='utf-8',
             request=request
         )
-    
+
     def download_car_image(self):
         # 找到所有的img元素
         img_elements = self.browser.find_elements(By.TAG_NAME, "img")
