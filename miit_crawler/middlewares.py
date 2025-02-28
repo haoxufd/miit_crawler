@@ -14,6 +14,7 @@ import requests
 from PIL import Image
 import numpy as np
 from captcha_recognizer.recognizer import Recognizer
+import random
 
 from miit_crawler.exceptions import CaptchaRecognitionError, ImageDownloadError
 
@@ -248,6 +249,7 @@ class SeleniumMiddleware(object):
             raise e
 
         # 点击继续访问按钮
+        time.sleep(0.05)
         submit_button.click()
         self.logger.info("已点击提交按钮")
 
