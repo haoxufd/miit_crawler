@@ -249,7 +249,7 @@ class SeleniumMiddleware(object):
             raise e
 
         # 点击继续访问按钮
-        time.sleep(0.05)
+        time.sleep(0.1)
         submit_button.click()
         self.logger.info("已点击提交按钮")
 
