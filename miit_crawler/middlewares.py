@@ -193,6 +193,10 @@ class SeleniumMiddleware(object):
         
         # 关联信号，确保爬虫关闭时关闭浏览器
         crawler.signals.connect(self.spider_closed, signal=signals.spider_closed)
+    
+    def clear_cache(self):
+        self.browser.execute_script("window.sessionStorage.clear();")
+        self.browser.execute_script("window.localStorage.clear();")
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -210,7 +214,7 @@ class SeleniumMiddleware(object):
         self.logger.info(f"开始处理滑块验证...")
         try:
             # 等待滑块, 继续访问按钮和验证码背景图片加载
-            slider = WebDriverWait(self.browser, 3).until(
+            slider = WebDriverWait(self.browser, 5).until(
                 EC.presence_of_element_located((By.CLASS_NAME, "yidun_slider"))
             )
             submit_button = WebDriverWait(self.browser, 3).until(
@@ -265,6 +269,8 @@ class SeleniumMiddleware(object):
         if "访问行为被禁止" in body:
             self.logger.error("滑块验证失败")
             raise CaptchaRecognitionError("滑块验证失败")
+        
+        self.clear_cache()
 
         # 返回Response对象
         return HtmlResponse(

@@ -74,7 +74,7 @@ class MiitCrawlerExcelPipeline:
         
         # 创建时间戳标识的Excel文件
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.excel_file = f"{self.data_dir}/miit_data.xlsx"
+        self.excel_file = f"{self.data_dir}/data_electric.xlsx"
         
         # 创建一个空的数据列表用于存储数据
         self.data = []

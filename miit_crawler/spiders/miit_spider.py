@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import scrapy
 import logging
 from ..items import MiitCrawlerItem
@@ -16,21 +17,31 @@ class MiitSpider(scrapy.Spider):
     def __init__(self, *args, **kwargs):
         super(MiitSpider, self).__init__(*args, **kwargs)
         self.logger.setLevel(logging.INFO)
-        try:
-            df = pandas.read_excel('crawled_data/miit_data.xlsx')
-            self.last_num = int(df.iloc[-1, 0].item())
-        except FileNotFoundError as e:
-            self.logger.error(f"文件 crawled_data/miit_data.xlsx 不存在: {e}")
-            self.last_num = 0
-        with open('urls.json', 'r') as f:
-            self.start_urls = json.load(f)[self.last_num:]
+        self.data_file = kwargs.get('data_file')
+        if self.data_file is None or not isinstance(self.data_file, str):
+            raise ValueError("未指定数据文件路径")
+        self.url_file = kwargs.get('url_file')
+        if self.url_file is None:
+            raise ValueError("未指定URL文件路径")
+        with open(self.url_file, 'r') as f:
+            self.start_urls = json.load(f)
     def start_requests(self):
         """
         启动爬虫的起始请求
         """
+        tag = [False for _ in range(len(self.start_urls))]
+        # 读取 data file, 获取已经爬过的序号, tag 置为 True
+        assert isinstance(self.data_file, str)
+        if os.path.exists(self.data_file):
+            df = pandas.read_excel(self.data_file)
+            for i in range(len(df)):
+                tag[df['序号'][i] - 1] = True
+
         for i, url in enumerate(self.start_urls):
-            self.logger.info(f"开始抓取: {url}")
-            yield scrapy.Request(url=url, callback=self.parse, meta={'number': i + self.last_num + 1})
+            if tag[i]:
+                continue
+            self.logger.info(f"开始抓取第 {i + 1} 条数据: {url}")
+            yield scrapy.Request(url=url, callback=self.parse, meta={'number': i + 1})
     
     def parse(self, response):
         """
