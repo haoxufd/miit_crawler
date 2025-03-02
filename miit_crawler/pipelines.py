@@ -67,15 +67,6 @@ class MiitCrawlerExcelPipeline:
     每10条数据写入一次文件, spider关闭时确保剩余数据也被写入
     """
     def __init__(self):
-        # 创建数据存储目录
-        self.data_dir = 'crawled_data'
-        if not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir)
-        
-        # 创建时间戳标识的Excel文件
-        self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.excel_file = f"{self.data_dir}/data_electric.xlsx"
-        
         # 创建一个空的数据列表用于存储数据
         self.data = []
         
@@ -84,6 +75,12 @@ class MiitCrawlerExcelPipeline:
         
         # 批次计数器
         self.batch_count = 0
+    
+    def open_spider(self, spider):
+        """
+        在爬虫启动时创建Excel文件
+        """
+        self.excel_file = spider.excel_file
         
     def process_item(self, item, spider):
         """

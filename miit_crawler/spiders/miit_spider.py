@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
+from unittest import signals
 import scrapy
 import logging
 from ..items import MiitCrawlerItem
@@ -17,23 +18,24 @@ class MiitSpider(scrapy.Spider):
     def __init__(self, *args, **kwargs):
         super(MiitSpider, self).__init__(*args, **kwargs)
         self.logger.setLevel(logging.INFO)
-        self.data_file = kwargs.get('data_file')
-        if self.data_file is None or not isinstance(self.data_file, str):
+        self.excel_file = kwargs.get('excel_file')
+        if self.excel_file is None or not isinstance(self.excel_file, str):
             raise ValueError("未指定数据文件路径")
         self.url_file = kwargs.get('url_file')
         if self.url_file is None:
             raise ValueError("未指定URL文件路径")
         with open(self.url_file, 'r') as f:
             self.start_urls = json.load(f)
+    
     def start_requests(self):
         """
         启动爬虫的起始请求
         """
         tag = [False for _ in range(len(self.start_urls))]
         # 读取 data file, 获取已经爬过的序号, tag 置为 True
-        assert isinstance(self.data_file, str)
-        if os.path.exists(self.data_file):
-            df = pandas.read_excel(self.data_file)
+        assert isinstance(self.excel_file, str)
+        if os.path.exists(self.excel_file):
+            df = pandas.read_excel(self.excel_file)
             for i in range(len(df)):
                 tag[df['序号'][i] - 1] = True
 
