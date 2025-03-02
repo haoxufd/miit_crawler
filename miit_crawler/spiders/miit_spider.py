@@ -38,6 +38,10 @@ class MiitSpider(scrapy.Spider):
             df = pandas.read_excel(self.excel_file)
             for i in range(len(df)):
                 tag[df['序号'][i] - 1] = True
+        
+        if all(tag):
+            self.logger.info("所有数据已爬取完毕，退出爬虫")
+            return
 
         for i, url in enumerate(self.start_urls):
             if tag[i]:
